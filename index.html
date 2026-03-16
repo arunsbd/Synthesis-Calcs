@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f766e" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="SynthCalc" />
+  <title>Synthesis Calculator</title>
+  <link rel="manifest" href="manifest.json" />
+  <style>
+    :root {
+      --bg: #f4f7f6;
+      --card: #ffffff;
+      --muted: #667085;
+      --text: #1f2937;
+      --teal: #0f766e;
+      --teal-2: #115e59;
+      --line: #dfe7e5;
+      --green-input: #e8f7ee;
+      --result: #effaf8;
+      --danger: #b42318;
+      --shadow: 0 10px 28px rgba(16, 24, 40, 0.08);
+      --radius: 18px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b1113;
+        --card: #11191d;
+        --muted: #98a2b3;
+        --text: #f2f4f7;
+        --teal: #14b8a6;
+        --teal-2: #0d9488;
+        --line: #223039;
+        --green-input: #0f2219;
+        --result: #0f1e1c;
+        --shadow: none;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background: var(--bg); color: var(--text); }
+    body { padding: max(18px, env(safe-area-inset-top)) 14px max(22px, env(safe-area-inset-bottom)); }
+    .app { max-width: 920px; margin: 0 auto; }
+    .hero, .card, .toolbar { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .hero { padding: 18px; margin-bottom: 14px; }
+    h1 { margin: 0 0 8px; font-size: 2rem; line-height: 1.1; }
+    .sub { color: var(--muted); font-size: 1.02rem; }
+    .toolbar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 12px; margin-bottom: 14px; }
+    .btn { border: 0; border-radius: 14px; padding: 13px 12px; font-weight: 700; font-size: 0.98rem; cursor: pointer; }
+    .btn.primary { background: var(--teal); color: white; }
+    .btn.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
+    .btn.small { padding: 9px 10px; font-size: 0.88rem; border-radius: 10px; }
+    .hint { color: var(--muted); text-align: center; font-size: .95rem; margin: 6px 0 14px; }
+    .grid { display: grid; gap: 14px; }
+    .card { padding: 14px; }
+    .rowtitle { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .badge { background: rgba(15,118,110,.12); color: var(--teal); border: 1px solid rgba(15,118,110,.22); padding: 5px 10px; border-radius: 999px; font-size: .86rem; font-weight: 700; }
+    .section-title { font-size: 1.15rem; font-weight: 800; }
+    .fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .results { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px; }
+    .field label, .result label { display: block; font-size: .83rem; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+    .field input { width: 100%; border-radius: 12px; border: 1px solid #b7dcc2; background: var(--green-input); color: var(--text); padding: 12px; font-size: 1rem; font-weight: 700; }
+    .result { background: var(--result); border: 1px solid var(--line); border-radius: 12px; padding: 10px; min-height: 78px; display: flex; flex-direction: column; justify-content: space-between; }
+    .result .value { font-size: 1.12rem; font-weight: 800; }
+    .copy-wrap { display: flex; gap: 8px; align-items: center; }
+    .micro { color: var(--muted); font-size: .8rem; }
+    .footer-note { color: var(--muted); text-align: center; margin-top: 14px; font-size: .92rem; }
+    .ok { color: var(--teal); font-weight: 700; }
+    .warn { color: var(--danger); font-weight: 700; }
+    @media (max-width: 760px) {
+      .toolbar { grid-template-columns: repeat(2, 1fr); }
+      .fields, .results { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 520px) {
+      h1 { font-size: 1.72rem; }
+      .fields, .results { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="hero">
+      <h1>Synthesis Calculator v3</h1>
+      <div class="sub">Native-style iPhone web app for reagent planning. Chemical A sets the base mmol. Chemicals B–E calculate from equivalents.</div>
+    </div>
+
+    <div class="toolbar">
+      <button class="btn primary" onclick="saveValues()">Save values</button>
+      <button class="btn secondary" onclick="loadValues()">Load saved</button>
+      <button class="btn secondary" onclick="resetDefaults()">Reset defaults</button>
+      <button class="btn secondary" onclick="shareInstallTips()">Install tips</button>
+    </div>
+
+    <div class="hint" id="installHint">For the native iPhone feel: open the hosted page in Safari, tap Share, then <span class="ok">Add to Home Screen</span>.</div>
+
+    <div class="grid" id="cards"></div>
+    <div class="footer-note">Tip: density is used for volume from mass. “Vol (mol basis)” uses mmol × MW / density and is helpful for liquid reagents based on equivalents.</div>
+  </div>
+
+  <script>
+    const defaultRows = [
+      { key:'A', name:'Chemical A', base:true, mw:294.35, eq:1, mass:200, density:1.10 },
+      { key:'B', name:'Chemical B', base:false, mw:252.93, eq:1.15, mass:'', density:1.67 },
+      { key:'C', name:'Chemical C', base:false, mw:138.12, eq:3.50, mass:'', density:0.945 },
+      { key:'D', name:'Chemical D', base:false, mw:166.13, eq:0.10, mass:'', density:0.742 },
+      { key:'E', name:'Chemical E', base:false, mw:129.16, eq:2.50, mass:'', density:0.74 }
+    ];
+
+    function cloneDefaults() { return JSON.parse(JSON.stringify(defaultRows)); }
+    let rows = cloneDefaults();
+
+    function num(v) {
+      const n = parseFloat(v);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function round(v, d=4) {
+      if (!Number.isFinite(v)) return '—';
+      return Number(v).toFixed(d).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
+    }
+
+    function calculate() {
+      const base = rows[0];
+      const baseMmol = base.mw > 0 ? num(base.mass) / num(base.mw) : 0;
+      rows = rows.map((r, idx) => {
+        const mw = num(r.mw), eq = num(r.eq), density = num(r.density), massInput = num(r.mass);
+        let mmol = 0, mass = 0;
+        if (idx === 0) {
+          mmol = mw > 0 ? massInput / mw : 0;
+          mass = massInput;
+        } else {
+          mmol = baseMmol * eq;
+          mass = mmol * mw;
+        }
+        const volMass = density > 0 ? mass / density : 0;
+        const volMol = density > 0 ? (mmol * mw) / density : 0;
+        return { ...r, mmol, calcMass: mass, volMass, volMol };
+      });
+      render();
+      persistTransient();
+    }
+
+    function render() {
+      const wrap = document.getElementById('cards');
+      wrap.innerHTML = rows.map((r, idx) => `
+        <div class="card">
+          <div class="rowtitle">
+            <div>
+              <div class="section-title">${r.name}</div>
+              <div class="micro">${idx===0 ? 'Reference reagent / limiting reagent' : 'Calculated from Chemical A × equivalents'}</div>
+            </div>
+            <div class="badge">${idx===0 ? 'Base' : `${round(r.eq,2)} eq`}</div>
+          </div>
+          <div class="fields">
+            <div class="field">
+              <label>MW (g/mol)</label>
+              <input inputmode="decimal" value="${r.mw}" oninput="updateField('${r.key}','mw',this.value)">
+            </div>
+            <div class="field">
+              <label>${idx===0 ? 'Mass (mg)' : 'Equivalents'}</label>
+              <input inputmode="decimal" value="${idx===0 ? r.mass : r.eq}" oninput="updateField('${r.key}','${idx===0 ? 'mass' : 'eq'}',this.value)">
+            </div>
+            <div class="field">
+              <label>Density (g/mL)</label>
+              <input inputmode="decimal" value="${r.density}" oninput="updateField('${r.key}','density',this.value)">
+            </div>
+          </div>
+          <div class="results">
+            <div class="result"><label>mmol</label><div class="value">${round(r.mmol,4)}</div></div>
+            <div class="result"><label>Mass (mg)</label><div class="value">${round(r.calcMass,1)}</div></div>
+            <div class="result"><label>Vol (µL) mass basis</label><div class="copy-wrap"><div class="value">${round(r.volMass,1)}</div><button class="btn small secondary" onclick="copyText('${round(r.volMass,1)} µL')">Copy</button></div></div>
+            <div class="result"><label>Vol (µL) mol basis</label><div class="copy-wrap"><div class="value">${round(r.volMol,1)}</div><button class="btn small secondary" onclick="copyText('${round(r.volMol,1)} µL')">Copy</button></div></div>
+          </div>
+        </div>
+      `).join('');
+
+      const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+      const installHint = document.getElementById('installHint');
+      installHint.innerHTML = standalone
+        ? '<span class="ok">Installed mode active.</span> This should now open without the normal browser bar.'
+        : 'For the native iPhone feel: open the hosted page in Safari, tap Share, then <span class="ok">Add to Home Screen</span>.';
+    }
+
+    function updateField(key, field, value) {
+      const row = rows.find(r => r.key === key);
+      row[field] = value;
+      calculate();
+    }
+
+    function copyText(text) {
+      navigator.clipboard?.writeText(text);
+    }
+
+    function saveValues() {
+      localStorage.setItem('synthcalc-saved', JSON.stringify(rows));
+      alert('Saved current values on this device.');
+    }
+
+    function loadValues() {
+      const raw = localStorage.getItem('synthcalc-saved');
+      if (raw) {
+        rows = JSON.parse(raw);
+        calculate();
+      } else {
+        alert('No saved values found yet.');
+      }
+    }
+
+    function resetDefaults() {
+      rows = cloneDefaults();
+      calculate();
+    }
+
+    function persistTransient() {
+      localStorage.setItem('synthcalc-autosave', JSON.stringify(rows));
+    }
+
+    function loadTransient() {
+      const raw = localStorage.getItem('synthcalc-autosave');
+      if (raw) {
+        rows = JSON.parse(raw);
+      }
+    }
+
+    function shareInstallTips() {
+      alert('iPhone install trick:\n1. Host this on GitHub Pages or another normal URL.\n2. Open that URL in Safari.\n3. Tap Share.\n4. Tap Add to Home Screen.\nThat removes most browser chrome and makes it feel like a native app.');
+    }
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+    }
+
+    loadTransient();
+    calculate();
+  </script>
+</body>
+</html>
