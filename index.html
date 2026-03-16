@@ -120,7 +120,8 @@
       return Number(v).toFixed(d).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
     }
 
-    function calculate() {
+    function calculate(options = {}) {
+      const preserve = options.preserveFocus || null;
       const base = rows[0];
       const baseMmol = base.mw > 0 ? num(base.mass) / num(base.mw) : 0;
       rows = rows.map((r, idx) => {
@@ -139,6 +140,9 @@
       });
       render();
       persistTransient();
+      if (preserve) {
+        restoreFocus(preserve);
+      }
     }
 
     function render() {
@@ -155,15 +159,15 @@
           <div class="fields">
             <div class="field">
               <label>MW (g/mol)</label>
-              <input inputmode="decimal" value="${r.mw}" oninput="updateField('${r.key}','mw',this.value)">
+              <input inputmode="decimal" value="${r.mw}" data-key="${r.key}" data-field="mw" oninput="updateFieldFromInput(this,'${r.key}','mw',this.value)">
             </div>
             <div class="field">
               <label>${idx===0 ? 'Mass (mg)' : 'Equivalents'}</label>
-              <input inputmode="decimal" value="${idx===0 ? r.mass : r.eq}" oninput="updateField('${r.key}','${idx===0 ? 'mass' : 'eq'}',this.value)">
+              <input inputmode="decimal" value="${idx===0 ? r.mass : r.eq}" data-key="${r.key}" data-field="${idx===0 ? 'mass' : 'eq'}" oninput="updateFieldFromInput(this,'${r.key}','${idx===0 ? 'mass' : 'eq'}',this.value)">
             </div>
             <div class="field">
               <label>Density (g/mL)</label>
-              <input inputmode="decimal" value="${r.density}" oninput="updateField('${r.key}','density',this.value)">
+              <input inputmode="decimal" value="${r.density}" data-key="${r.key}" data-field="density" oninput="updateFieldFromInput(this,'${r.key}','density',this.value)">
             </div>
           </div>
           <div class="results">
@@ -182,10 +186,32 @@
         : 'For the native iPhone feel: open the hosted page in Safari, tap Share, then <span class="ok">Add to Home Screen</span>.';
     }
 
-    function updateField(key, field, value) {
+    function updateFieldFromInput(el, key, field, value) {
       const row = rows.find(r => r.key === key);
+      if (!row) return;
       row[field] = value;
-      calculate();
+      const preserve = {
+        key,
+        field,
+        start: el.selectionStart ?? value.length,
+        end: el.selectionEnd ?? value.length
+      };
+      calculate({ preserveFocus: preserve });
+    }
+
+    function restoreFocus(preserve) {
+      requestAnimationFrame(() => {
+        const selector = `input[data-key="${preserve.key}"][data-field="${preserve.field}"]`;
+        const input = document.querySelector(selector);
+        if (!input) return;
+        input.focus({ preventScroll: true });
+        const len = input.value.length;
+        const start = Math.max(0, Math.min(preserve.start, len));
+        const end = Math.max(0, Math.min(preserve.end, len));
+        try {
+          input.setSelectionRange(start, end);
+        } catch (e) {}
+      });
     }
 
     function copyText(text) {
