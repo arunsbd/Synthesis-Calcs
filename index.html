@@ -120,8 +120,7 @@
       return Number(v).toFixed(d).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
     }
 
-    function calculate(options = {}) {
-      const preserve = options.preserveFocus || null;
+    function calculate() {
       const base = rows[0];
       const baseMmol = base.mw > 0 ? num(base.mass) / num(base.mw) : 0;
       rows = rows.map((r, idx) => {
@@ -140,44 +139,85 @@
       });
       render();
       persistTransient();
-      if (preserve) {
-        restoreFocus(preserve);
-      }
     }
 
     function render() {
       const wrap = document.getElementById('cards');
-      wrap.innerHTML = rows.map((r, idx) => `
-        <div class="card">
-          <div class="rowtitle">
-            <div>
-              <div class="section-title">${r.name}</div>
-              <div class="micro">${idx===0 ? 'Reference reagent / limiting reagent' : 'Calculated from Chemical A × equivalents'}</div>
+      if (!wrap.dataset.initialized) {
+        wrap.innerHTML = rows.map((r, idx) => `
+          <div class="card" data-row="${r.key}">
+            <div class="rowtitle">
+              <div>
+                <div class="section-title">${r.name}</div>
+                <div class="micro">${idx===0 ? 'Reference reagent / limiting reagent' : 'Calculated from Chemical A × equivalents'}</div>
+              </div>
+              <div class="badge" data-role="badge">${idx===0 ? 'Base' : `${round(r.eq,2)} eq`}</div>
             </div>
-            <div class="badge">${idx===0 ? 'Base' : `${round(r.eq,2)} eq`}</div>
+            <div class="fields">
+              <div class="field">
+                <label>MW (g/mol)</label>
+                <input inputmode="decimal" value="${r.mw}" data-key="${r.key}" data-field="mw" oninput="updateFieldFromInput(this,'${r.key}','mw',this.value)">
+              </div>
+              <div class="field">
+                <label>${idx===0 ? 'Mass (mg)' : 'Equivalents'}</label>
+                <input inputmode="decimal" value="${idx===0 ? r.mass : r.eq}" data-key="${r.key}" data-field="${idx===0 ? 'mass' : 'eq'}" oninput="updateFieldFromInput(this,'${r.key}','${idx===0 ? 'mass' : 'eq'}',this.value)">
+              </div>
+              <div class="field">
+                <label>Density (g/mL)</label>
+                <input inputmode="decimal" value="${r.density}" data-key="${r.key}" data-field="density" oninput="updateFieldFromInput(this,'${r.key}','density',this.value)">
+              </div>
+            </div>
+            <div class="results">
+              <div class="result"><label>mmol</label><div class="value" data-role="mmol">${round(r.mmol,4)}</div></div>
+              <div class="result"><label>Mass (mg)</label><div class="value" data-role="mass">${round(r.calcMass,1)}</div></div>
+              <div class="result"><label>Vol (µL) mass basis</label><div class="copy-wrap"><div class="value" data-role="vol-mass">${round(r.volMass,1)}</div><button class="btn small secondary" data-role="copy-vol-mass">Copy</button></div></div>
+              <div class="result"><label>Vol (µL) mol basis</label><div class="copy-wrap"><div class="value" data-role="vol-mol">${round(r.volMol,1)}</div><button class="btn small secondary" data-role="copy-vol-mol">Copy</button></div></div>
+            </div>
           </div>
-          <div class="fields">
-            <div class="field">
-              <label>MW (g/mol)</label>
-              <input inputmode="decimal" value="${r.mw}" data-key="${r.key}" data-field="mw" oninput="updateFieldFromInput(this,'${r.key}','mw',this.value)">
-            </div>
-            <div class="field">
-              <label>${idx===0 ? 'Mass (mg)' : 'Equivalents'}</label>
-              <input inputmode="decimal" value="${idx===0 ? r.mass : r.eq}" data-key="${r.key}" data-field="${idx===0 ? 'mass' : 'eq'}" oninput="updateFieldFromInput(this,'${r.key}','${idx===0 ? 'mass' : 'eq'}',this.value)">
-            </div>
-            <div class="field">
-              <label>Density (g/mL)</label>
-              <input inputmode="decimal" value="${r.density}" data-key="${r.key}" data-field="density" oninput="updateFieldFromInput(this,'${r.key}','density',this.value)">
-            </div>
-          </div>
-          <div class="results">
-            <div class="result"><label>mmol</label><div class="value">${round(r.mmol,4)}</div></div>
-            <div class="result"><label>Mass (mg)</label><div class="value">${round(r.calcMass,1)}</div></div>
-            <div class="result"><label>Vol (µL) mass basis</label><div class="copy-wrap"><div class="value">${round(r.volMass,1)}</div><button class="btn small secondary" onclick="copyText('${round(r.volMass,1)} µL')">Copy</button></div></div>
-            <div class="result"><label>Vol (µL) mol basis</label><div class="copy-wrap"><div class="value">${round(r.volMol,1)}</div><button class="btn small secondary" onclick="copyText('${round(r.volMol,1)} µL')">Copy</button></div></div>
-          </div>
-        </div>
-      `).join('');
+        `).join('');
+        wrap.dataset.initialized = 'true';
+      }
+
+      rows.forEach((r, idx) => {
+        const card = wrap.querySelector(`[data-row="${r.key}"]`);
+        if (!card) return;
+
+        const active = document.activeElement;
+        const fields = {
+          mw: r.mw,
+          density: r.density,
+          [idx === 0 ? 'mass' : 'eq']: idx === 0 ? r.mass : r.eq
+        };
+
+        Object.entries(fields).forEach(([field, value]) => {
+          const input = card.querySelector(`input[data-field="${field}"]`);
+          if (input && input !== active) {
+            input.value = value;
+          }
+        });
+
+        const badge = card.querySelector('[data-role="badge"]');
+        if (badge) badge.textContent = idx === 0 ? 'Base' : `${round(r.eq,2)} eq`;
+
+        const mmol = round(r.mmol,4);
+        const mass = round(r.calcMass,1);
+        const volMass = round(r.volMass,1);
+        const volMol = round(r.volMol,1);
+
+        const mmolEl = card.querySelector('[data-role="mmol"]');
+        const massEl = card.querySelector('[data-role="mass"]');
+        const volMassEl = card.querySelector('[data-role="vol-mass"]');
+        const volMolEl = card.querySelector('[data-role="vol-mol"]');
+        const copyVolMass = card.querySelector('[data-role="copy-vol-mass"]');
+        const copyVolMol = card.querySelector('[data-role="copy-vol-mol"]');
+
+        if (mmolEl) mmolEl.textContent = mmol;
+        if (massEl) massEl.textContent = mass;
+        if (volMassEl) volMassEl.textContent = volMass;
+        if (volMolEl) volMolEl.textContent = volMol;
+        if (copyVolMass) copyVolMass.onclick = () => copyText(`${volMass} µL`);
+        if (copyVolMol) copyVolMol.onclick = () => copyText(`${volMol} µL`);
+      });
 
       const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
       const installHint = document.getElementById('installHint');
@@ -190,28 +230,7 @@
       const row = rows.find(r => r.key === key);
       if (!row) return;
       row[field] = value;
-      const preserve = {
-        key,
-        field,
-        start: el.selectionStart ?? value.length,
-        end: el.selectionEnd ?? value.length
-      };
-      calculate({ preserveFocus: preserve });
-    }
-
-    function restoreFocus(preserve) {
-      requestAnimationFrame(() => {
-        const selector = `input[data-key="${preserve.key}"][data-field="${preserve.field}"]`;
-        const input = document.querySelector(selector);
-        if (!input) return;
-        input.focus({ preventScroll: true });
-        const len = input.value.length;
-        const start = Math.max(0, Math.min(preserve.start, len));
-        const end = Math.max(0, Math.min(preserve.end, len));
-        try {
-          input.setSelectionRange(start, end);
-        } catch (e) {}
-      });
+      calculate();
     }
 
     function copyText(text) {
